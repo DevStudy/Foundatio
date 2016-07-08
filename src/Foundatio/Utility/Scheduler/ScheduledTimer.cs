@@ -9,13 +9,13 @@ namespace Foundatio.Utility {
     public class ScheduledTimer : IDisposable {
         private DateTime _next = DateTime.MaxValue;
         private DateTime _last = DateTime.MinValue;
-        private readonly Timer _timer;
         private readonly ILogger _logger;
         private readonly Func<Task<DateTime?>> _timerCallback;
         private readonly TimeSpan _minimumInterval;
         private readonly AsyncLock _lock = new AsyncLock();
         private bool _isRunning = false;
         private bool _shouldRunAgainImmediately = false;
+        private IDisposable _scheduled = null;
 
         public ScheduledTimer(Func<Task<DateTime?>> timerCallback, TimeSpan? dueTime = null, TimeSpan? minimumIntervalTime = null, ILoggerFactory loggerFactory = null) {
             if (timerCallback == null)
@@ -26,7 +26,8 @@ namespace Foundatio.Utility {
             _minimumInterval = minimumIntervalTime ?? TimeSpan.Zero;
 
             int dueTimeMs = dueTime.HasValue ? (int)dueTime.Value.TotalMilliseconds : Timeout.Infinite;
-            _timer = new Timer(s => RunCallbackAsync().GetAwaiter().GetResult(), null, dueTimeMs, Timeout.Infinite);
+            if (dueTimeMs > 0)
+                _scheduled = SystemClock.Scheduler.Schedule(TimeSpan.FromMilliseconds(dueTimeMs), RunCallbackAsync);
         }
 
         public void ScheduleNext(DateTime? utcDate = null) {
@@ -34,7 +35,7 @@ namespace Foundatio.Utility {
             if (!utcDate.HasValue || utcDate.Value < utcNow)
                 utcDate = utcNow;
 
-            _logger.Trace(() => $"ScheduleNext called: value={utcDate.Value.ToString("O")}");
+            _logger.Trace(() => $"ScheduleNext called: value={utcDate.Value:O}");
 
             if (utcDate == DateTime.MaxValue) {
                 _logger.Trace("Ignoring MaxValue");
@@ -60,8 +61,9 @@ namespace Foundatio.Utility {
                     _last = _next;
 
                 _logger.Trace(() => $"Scheduling next: delay={delay}");
-
-                _timer.Change(delay, Timeout.Infinite);
+                
+                _scheduled?.Dispose();
+                _scheduled = SystemClock.Scheduler.Schedule(TimeSpan.FromMilliseconds(delay), RunCallbackAsync);
             }
         }
 
@@ -115,7 +117,7 @@ namespace Foundatio.Utility {
         }
 
         public void Dispose() {
-            _timer?.Dispose();
+            _scheduled?.Dispose();
         }
     }
 }
