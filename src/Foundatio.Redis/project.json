@@ -27,9 +27,13 @@
     },
     "dependencies": {
       "Foundatio": {
-        "target": "project"
+        "type": "build",
+        "version": "*"
       },
-        "StackExchange.Redis": "1.1.605"
+      "StackExchange.Redis": "1.1.605"
+    },
+    "runtimes": {
+      "win": {}
     },
     "frameworks": {
         "net46": {
